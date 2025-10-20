@@ -1,0 +1,9 @@
+# Python Virtual ENV
+
+venv
+
+# MacOS stuff
+*.DS_STORE
+
+# ToDos
+
