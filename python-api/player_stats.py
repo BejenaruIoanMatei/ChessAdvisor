@@ -20,6 +20,41 @@ def get_ratings(data: dict, period: str):
         f"{period}_blitz_rating": blitz_rating,
         f"{period}_bullet_rating": bullet_rating
     }
+    
+def get_stats_for_time_management_all(data: dict):
+    """wins, draws, losses
+    
+    Args:
+        data (dict): player stats
+
+    Returns:
+        dict: W-D-L for rapid/blitz/bullet
+    """
+    rapid_rating = data.get("chess_rapid", {}).get("record", {})
+    blitz_rating = data.get("chess_blitz", {}).get("record", {})
+    bullet_rating = data.get("chess_bullet", {}).get("record", {})
+    
+    return {
+        'stats_rapid': rapid_rating,
+        'stats_blitz': blitz_rating,
+        'stats_bullet': bullet_rating,
+    }
+    
+def get_stats_for_time_management_only(data: dict, time_control: str):
+    """wins, draws, losses for rapid/blitz/bullet
+
+    Args:
+        data (dict): player stats
+        time_control (str): rapid/blitz/bullet
+
+    Returns:
+        dict: wins, draws, losses for rapid/blitz/bullet
+    """
+    stats = data.get(f"chess_{time_control}", {}).get("record", {})
+    
+    return {
+        f"stats_{time_control}": stats
+    }
 
 def get_player_stats(username: str):
     """
@@ -42,12 +77,16 @@ def get_player_stats(username: str):
         return {"error": f"Player {username} not found or access forbidden", "status_code": response.status_code}
 
     data = response.json()
-    last_stats = get_ratings(data, "last")
-    best_stats = get_ratings(data, "best")
     
-    return {
-        1: last_stats,
-        2: best_stats
+    player_stats = {
+        'player_ratings_last': get_ratings(data, 'last'),
+        'player_ratings_best': get_ratings(data, 'best'),
+        'stats_for_time_management_all': get_stats_for_time_management_all(data),
+        'stats_for_rapid': get_stats_for_time_management_only(data, 'rapid'),
+        'stats_for_blitz': get_stats_for_time_management_only(data, 'blitz'),
+        'stats_for_bullet': get_stats_for_time_management_only(data, 'bullet')
     }
+    
+    return player_stats
 
-print(get_player_stats("mateispaimata"))
+print(get_player_stats("bogdogun"))
