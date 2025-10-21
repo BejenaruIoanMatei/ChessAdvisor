@@ -3,7 +3,7 @@ from collections import defaultdict
 import re
 
 def worst_openings_wr(username: str):
-    """_summary_
+    """
         Searches the player, finds his archives where the games are stored.
         Foreach game, the wins, losses, draws are stored.
         In addition to match results, this function gets the openings and for every opening
@@ -11,7 +11,7 @@ def worst_openings_wr(username: str):
     
         Top 10 worst openings for a player regarding the win rate
     Args:
-        username (str): _description_
+        username (str): player username
     """
     username = username.lower()
     archives_url = f"https://api.chess.com/pub/player/{username}/games/archives"
