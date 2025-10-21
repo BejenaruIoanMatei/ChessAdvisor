@@ -2,7 +2,17 @@ import requests
 from collections import defaultdict
 import re
 
-def worst_openings(username: str):
+def worst_openings_wr(username: str):
+    """_summary_
+        Searches the player, finds his archives where the games are stored.
+        Foreach game, the wins, losses, draws are stored.
+        In addition to match results, this function gets the openings and for every opening
+    with more than 10 games it displays the win rate (W - L - D)
+    
+        Top 10 worst openings for a player regarding the win rate
+    Args:
+        username (str): _description_
+    """
     username = username.lower()
     archives_url = f"https://api.chess.com/pub/player/{username}/games/archives"
     headers = {'User-Agent': 'ChessAdvisorApp/1.0'}
@@ -23,6 +33,12 @@ def worst_openings(username: str):
             response.raise_for_status()
             games = response.json()["games"]
             
+            match_results = {
+                'wins': ['win'],
+                'losses': ['loss', 'abandoned', 'timeout', 'checkmated', 'resigned'],
+                'draws': ['agreed','stalemate', 'draw', 'repetition'],
+            }
+            
             for game in games:
                 pgn = game.get("pgn", "")
                 opening_match = re.search(r'\[ECOUrl "https://www\.chess\.com/openings/(.+?)"\]', pgn)
@@ -39,21 +55,12 @@ def worst_openings(username: str):
                 else:
                     continue
                 
-                if player_result == "win":
+                if player_result in match_results["wins"]:
                     openings_stats[opening_name]["wins"] += 1
-                elif player_result == "loss":
+                elif player_result in match_results["losses"]:
                     openings_stats[opening_name]["losses"] += 1
-                elif player_result == "abandoned":
-                    openings_stats[opening_name]["losses"] += 1
-                elif player_result == "stalemate":
-                    openings_stats[opening_name]["draws"] += 1
-                elif player_result == "draw":
-                    openings_stats[opening_name]["draws"] += 1
-                elif player_result == "timeout":
-                    openings_stats[opening_name]["losses"] += 1
-                elif player_result == "checkmated":
-                    openings_stats[opening_name]["losses"] += 1
-                
+                elif player_result in match_results["draws"]:
+                    openings_stats[opening_name]["draws"] += 1                
                     
         except Exception as e:
             print(f"Error to archive: {e}")
@@ -80,14 +87,14 @@ def worst_openings(username: str):
                 "draws": stats["draws"],
                 "total": total
             })
-    
+        
     openings_with_wr.sort(key=lambda x: x["wr"])
     
     print(f"\nTop 10 worst openings for {username}:\n")
-    for i, opening in enumerate(openings_with_wr[:10], 1):
+    for i, opening in enumerate(openings_with_wr, 1):
         print(f"{i}. {opening['opening']}")
         print(f"   Win Rate: {opening['wr']:.2f}%")
         print(f"   Record: {opening['wins']}W - {opening['losses']}L - {opening['draws']}D ({opening['total']} jocuri)")
         print()
 
-worst_openings("damipace")
+worst_openings_wr("damipace")
