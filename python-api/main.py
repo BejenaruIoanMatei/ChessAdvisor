@@ -1,62 +1,10 @@
 import requests
 from collections import defaultdict
 from fastapi import FastAPI
+import re
+from utils import player_stats
 
 app = FastAPI()
-
-def get_ratings(data: dict, period: str):
-    """
-    Args:
-        data (dict): player stats
-        period (str): last/best
-        
-    Returns:
-        dict : ratings for a specific period last/best
-    """
-    rapid_rating = data.get("chess_rapid", {}).get(f"{period}", {}).get("rating", "N/A")
-    blitz_rating = data.get("chess_blitz", {}).get(f"{period}", {}).get("rating", "N/A")
-    bullet_rating = data.get("chess_bullet", {}).get(f"{period}", {}).get("rating", "N/A")
-    
-    return {
-        f"{period}_rapid_rating": rapid_rating,
-        f"{period}_blitz_rating": blitz_rating,
-        f"{period}_bullet_rating": bullet_rating
-    }
-    
-def get_stats_for_time_management_all(data: dict):
-    """wins, draws, losses
-    
-    Args:
-        data (dict): player stats
-
-    Returns:
-        dict: W-D-L for rapid/blitz/bullet
-    """
-    rapid_rating = data.get("chess_rapid", {}).get("record", {})
-    blitz_rating = data.get("chess_blitz", {}).get("record", {})
-    bullet_rating = data.get("chess_bullet", {}).get("record", {})
-    
-    return {
-        'stats_rapid': rapid_rating,
-        'stats_blitz': blitz_rating,
-        'stats_bullet': bullet_rating,
-    }
-    
-def get_stats_for_time_management_only(data: dict, time_control: str):
-    """wins, draws, losses for rapid/blitz/bullet
-
-    Args:
-        data (dict): player stats
-        time_control (str): rapid/blitz/bullet
-
-    Returns:
-        dict: wins, draws, losses for rapid/blitz/bullet
-    """
-    stats = data.get(f"chess_{time_control}", {}).get("record", {})
-    
-    return {
-        f"stats_{time_control}": stats
-    }
 
 @app.get("/player/{username}")
 def get_player_stats(username: str):
@@ -81,14 +29,111 @@ def get_player_stats(username: str):
 
     data = response.json()
     
-    player_stats = {
-        'player_ratings_last': get_ratings(data, 'last'),
-        'player_ratings_best': get_ratings(data, 'best'),
-        'stats_for_rapid': get_stats_for_time_management_only(data, 'rapid'),
-        'stats_for_blitz': get_stats_for_time_management_only(data, 'blitz'),
-        'stats_for_bullet': get_stats_for_time_management_only(data, 'bullet')
+    player_data = {
+        'player_ratings_last': player_stats.get_ratings(data, 'last'),
+        'player_ratings_best': player_stats.get_ratings(data, 'best'),
+        'stats_for_rapid': player_stats.get_stats_for_time_management_only(data, 'rapid'),
+        'stats_for_blitz': player_stats.get_stats_for_time_management_only(data, 'blitz'),
+        'stats_for_bullet': player_stats.get_stats_for_time_management_only(data, 'bullet')
     }
+
+    return player_data
+
+@app.get("/player/worst/{username}")
+def worst_openings_wr(username: str):
+    """
+        Searches the player, finds his archives where the games are stored.
+        Foreach game, the wins, losses, draws are stored.
+        In addition to match results, this function gets the openings and for every opening
+    with more than 10 games it displays the win rate (W - L - D)
     
-    return player_stats
+        Top 10 worst openings for a player regarding the win rate
+    Args:
+        username (str): player username
+    """
+    username = username.lower()
+    archives_url = f"https://api.chess.com/pub/player/{username}/games/archives"
+    headers = {'User-Agent': 'ChessAdvisorApp/1.0'}
+    
+    try:
+        response = requests.get(archives_url, headers=headers)
+        response.raise_for_status()
+        archives = response.json()["archives"]
+    except Exception as e:
+        print(f"Error to archvies: {e}")
+        return
+    
+    openings_stats = defaultdict(lambda: {"wins": 0, "losses": 0, "draws": 0})
+    
+    for archive_url in archives:
+        try:
+            response = requests.get(archive_url, headers=headers)
+            response.raise_for_status()
+            games = response.json()["games"]
+            
+            match_results = {
+                'wins': ['win'],
+                'losses': ['loss', 'abandoned', 'timeout', 'checkmated', 'resigned'],
+                'draws': ['agreed','stalemate', 'draw', 'repetition'],
+            }
+            
+            for game in games:
+                pgn = game.get("pgn", "")
+                opening_match = re.search(r'\[ECOUrl "https://www\.chess\.com/openings/(.+?)"\]', pgn)
+                
+                if not opening_match:
+                    continue
+                
+                opening_name = opening_match.group(1).replace("-", " ")
+                
+                if game["white"]["username"].lower() == username:
+                    player_result = game["white"]["result"]
+                elif game["black"]["username"].lower() == username:
+                    player_result = game["black"]["result"]
+                else:
+                    continue
+                
+                if player_result in match_results["wins"]:
+                    openings_stats[opening_name]["wins"] += 1
+                elif player_result in match_results["losses"]:
+                    openings_stats[opening_name]["losses"] += 1
+                elif player_result in match_results["draws"]:
+                    openings_stats[opening_name]["draws"] += 1                
+                    
+        except Exception as e:
+            print(f"Error to archive: {e}")
+            continue
+    
+    if not openings_stats:
+        print(f"No games found for opening {username}")
+        return
+    
+    total_games = sum(s["wins"] + s["losses"] + s["draws"] for s in openings_stats.values())
+    print(f"Total games: {total_games}")
+    print(f"Total different openings: {len(openings_stats)}\n")
+    
+    openings_with_wr = []
+    for opening_name, stats in openings_stats.items():
+        total = stats["wins"] + stats["losses"] + stats["draws"]
+        if total >= 10:
+            win_rate = (stats["wins"] / total) * 100
+            openings_with_wr.append({
+                "opening": opening_name,
+                "wr": win_rate,
+                "wins": stats["wins"],
+                "losses": stats["losses"],
+                "draws": stats["draws"],
+                "total": total
+            })
+        
+    openings_with_wr.sort(key=lambda x: x["wr"])
+    
+    top_10_worst = openings_with_wr[:10]
+
+    return {
+        "player": username,
+        "total_openings_analyzed": len(openings_with_wr),
+        "worst_openings": top_10_worst
+    }
 
     
