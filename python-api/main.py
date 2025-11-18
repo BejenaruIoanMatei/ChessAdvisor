@@ -3,10 +3,48 @@ from collections import defaultdict
 from fastapi import FastAPI
 import re
 from utils import player_stats
+from fastapi import HTTPException
+
 
 app = FastAPI()
 
-@app.get("/player/{username}")
+@app.get("player/{username}/profile")
+def get_player_profile(username: str):
+    """
+    Get player profile including username, chess.com url, avatar, country
+
+    Args:
+        username (str): player username on chess.com
+    """
+    username = username.lower()
+    player_profile = f"https://api.chess.com/pub/player/{username}"
+    
+    headers = {
+        "User-Agent": "ChessAdvisorApp/1.0"
+    }
+    try:
+        response = requests.get(player_profile, headers = headers)
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(
+            status_code = 503, 
+            detail = f"connection error {str(e)}"
+        )
+    
+    if response.status_code != 200:
+        raise  HTTPException(
+            status_code = response.status_code,
+            detail = f"chess.com returned {response.status_code}"
+        )
+    
+    try:
+        data = response.json()
+    except ValueError:
+        raise HTTPException(status_code = 502, detail = "invalid response from server")
+    
+    return data
+    
+
+@app.get("/player/{username}/stats")
 def get_player_stats(username: str):
     """
     Args:
@@ -22,12 +60,27 @@ def get_player_stats(username: str):
         "User-Agent": "ChessAdvisorApp/1.0"
     }
     
-    response = requests.get(player_elo_stats, headers=headers)
+    try: 
+        response = requests.get(player_elo_stats, headers=headers)
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(
+            status_code = 503,
+            detail = f"connection error {str(e)}"
+        )
     
     if response.status_code != 200:
-        return {"error": f"Player {username} not found or access forbidden", "status_code": response.status_code}
+        raise HTTPException(
+            status_code = response.status_code,
+            detail = f"chess.com returned {response.status.code}"
+        )
 
-    data = response.json()
+    try:
+        data = response.json()
+    except ValueError:
+        raise HTTPException(
+            status_code = 502,
+            detail = "invalid response from server"
+        )
     
     player_data = {
         'player_ratings_last': player_stats.get_ratings(data, 'last'),
@@ -39,7 +92,7 @@ def get_player_stats(username: str):
 
     return player_data
 
-@app.get("/player/worst/{username}")
+@app.get("/player/{username}/worst")
 def worst_openings_wr(username: str):
     """
         Searches the player, finds his archives where the games are stored.
@@ -53,7 +106,10 @@ def worst_openings_wr(username: str):
     """
     username = username.lower()
     archives_url = f"https://api.chess.com/pub/player/{username}/games/archives"
-    headers = {'User-Agent': 'ChessAdvisorApp/1.0'}
+    
+    headers = {
+        'User-Agent': 'ChessAdvisorApp/1.0'
+    }
     
     try:
         response = requests.get(archives_url, headers=headers)
