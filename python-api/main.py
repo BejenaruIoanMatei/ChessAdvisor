@@ -92,23 +92,23 @@ def get_player_stats(username: str):
 @app.get("/player/{username}/player_most_played_openings")
 def most_played_op(username: str):
     username = username.lower()
-    openings_white, openings_black = player_games.player_games(username)
+    openings_white, openings_black = player_games(username)
 
     return {
         "player": username,
-        "white": player_games.compute_top_10(openings_white, "total"),
-        "black": player_games.compute_top_10(openings_black, "total"),
+        "white": compute_top_10(openings_white, "total"),
+        "black": compute_top_10(openings_black, "total"),
     }
 
 @app.get('/player/{username}/player_best_openings')
 def best_played_op(username: str):
     username = username.lower()
-    openings_white, openings_black = player_games.player_games(username)
+    openings_white, openings_black = player_games(username)
     
     return {
         "player": username,
-        "white": player_games.compute_top_10(openings_white, "wr"),
-        "black": player_games.compute_top_10(openings_black, "wr"),
+        "white": compute_top_10(openings_white, "wr"),
+        "black": compute_top_10(openings_black, "wr"),
     }
 
 
